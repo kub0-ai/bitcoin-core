@@ -1,0 +1,9 @@
+Bitcoin Core {{ .Chart.AppVersion }} deployed.
+
+RPC:
+  kubectl port-forward svc/{{ include "bitcoin-core.fullname" . }} 8332:{{ .Values.service.rpcPort }}
+  bitcoin-cli -rpcconnect=127.0.0.1 -rpcport=8332 getblockchaininfo
+
+P2P port: {{ .Values.service.p2pPort }}
+
+Data volume: {{ .Values.persistence.size }}

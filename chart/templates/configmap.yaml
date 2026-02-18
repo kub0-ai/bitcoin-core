@@ -1,0 +1,11 @@
+{{- if .Values.config }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "bitcoin-core.fullname" . }}
+  labels:
+    {{- include "bitcoin-core.labels" . | nindent 4 }}
+data:
+  bitcoin.conf: |
+    {{- .Values.config | nindent 4 }}
+{{- end }}
