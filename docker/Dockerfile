@@ -35,7 +35,9 @@ RUN set -ex \
   && curl -SLO https://bitcoincore.org/bin/bitcoin-core-${BITCOIN_VERSION}/bitcoin-${BITCOIN_VERSION}-${ARCH}.tar.gz \
   && curl -SLO https://bitcoincore.org/bin/bitcoin-core-${BITCOIN_VERSION}/SHA256SUMS \
   && curl -SLO https://bitcoincore.org/bin/bitcoin-core-${BITCOIN_VERSION}/SHA256SUMS.asc \
-  && gpg --verify SHA256SUMS.asc SHA256SUMS \
+  && if ! gpg --verify --status-fd=1 SHA256SUMS.asc SHA256SUMS 2>/dev/null | grep -qE "GOODSIG|EXPKEYSIG"; then \
+       echo "ERROR: No valid GPG signature found in SHA256SUMS.asc"; exit 1; \
+     fi \
   && grep " bitcoin-${BITCOIN_VERSION}-${ARCH}.tar.gz" SHA256SUMS | sha256sum -c - \
   && tar -xzf *.tar.gz -C /opt \
   && rm *.tar.gz *.asc SHA256SUMS \
