@@ -7,11 +7,11 @@ on:
         description: 'Bitcoin Core version (e.g., 27.2)'
         required: true
       keys:
-        description: 'GPG keys (space-separated fingerprints, overrides KEYS file)'
+        description: 'GPG keys (space-separated, overrides auto-discovery)'
         required: false
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 jobs:
@@ -55,3 +55,10 @@ jobs:
           tags: ghcr.io/kub0-ai/bitcoin-core:${{ github.event.inputs.version }}
           cache-from: type=registry,ref=ghcr.io/kub0-ai/bitcoin-core:buildcache
           cache-to: type=registry,ref=ghcr.io/kub0-ai/bitcoin-core:buildcache,mode=max
+
+      - name: Create git tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${{ github.event.inputs.version }}" -m "Bitcoin Core ${{ github.event.inputs.version }}" || true
+          git push origin "v${{ github.event.inputs.version }}" || true
