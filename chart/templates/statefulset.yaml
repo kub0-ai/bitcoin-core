@@ -21,6 +21,15 @@ spec:
       {{- end }}
       securityContext:
         fsGroup: 101
+      {{- if or .Values.config (gt (int .Values.bitcoin.prune) 0) }}
+      initContainers:
+        - name: init-config
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          command: ["sh", "-c", "rm -f /home/bitcoin/.bitcoin/bitcoin.conf"]
+          volumeMounts:
+            - name: data
+              mountPath: /home/bitcoin/.bitcoin
+      {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
@@ -36,6 +45,7 @@ spec:
             exec:
               command:
                 - bitcoin-cli
+                - -datadir=/home/bitcoin/.bitcoin
                 - -rpcwait
                 - getblockchaininfo
             initialDelaySeconds: 60
@@ -45,24 +55,29 @@ spec:
             exec:
               command:
                 - bitcoin-cli
+                - -datadir=/home/bitcoin/.bitcoin
                 - -rpcwait
                 - getblockchaininfo
             initialDelaySeconds: 30
             periodSeconds: 30
             timeoutSeconds: 10
+          {{- if or .Values.config (gt (int .Values.bitcoin.prune) 0) }}
+          args:
+            - -conf=/etc/bitcoin/bitcoin.conf
+          {{- end }}
           volumeMounts:
             - name: data
               mountPath: /home/bitcoin/.bitcoin
-            {{- if .Values.config }}
+            {{- if or .Values.config (gt (int .Values.bitcoin.prune) 0) }}
             - name: config
-              mountPath: /home/bitcoin/.bitcoin/bitcoin.conf
+              mountPath: /etc/bitcoin/bitcoin.conf
               subPath: bitcoin.conf
             {{- end }}
           {{- with .Values.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-      {{- if .Values.config }}
+      {{- if or .Values.config (gt (int .Values.bitcoin.prune) 0) }}
       volumes:
         - name: config
           configMap:
@@ -92,5 +107,5 @@ spec:
         {{- end }}
         resources:
           requests:
-            storage: {{ .Values.persistence.size }}
+            storage: {{ if gt (int .Values.bitcoin.prune) 0 }}{{ .Values.persistence.prunedSize }}{{ else }}{{ .Values.persistence.size }}{{ end }}
   {{- end }}

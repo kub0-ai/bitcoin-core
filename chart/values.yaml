@@ -7,9 +7,16 @@ imagePullSecrets: []
 
 replicaCount: 1
 
+bitcoin:
+  # 0   = no pruning (full node, ~700Gi needed)
+  # 1   = manual pruning via bitcoin-cli pruneblockchain
+  # 550+ = automatic pruning, keep this many MiB of block data (550 is minimum)
+  prune: 0
+
 persistence:
   enabled: true
-  size: 700Gi
+  size: 700Gi       # PVC size for full (unpruned) node
+  prunedSize: 10Gi  # PVC size used when bitcoin.prune > 0
   storageClass: ""
   accessModes:
     - ReadWriteOnce
@@ -19,7 +26,7 @@ service:
   rpcPort: 8332
   p2pPort: 8333
 
-# bitcoin.conf contents (set to "" to skip ConfigMap)
+# Extra bitcoin.conf lines (set to "" to skip ConfigMap)
 config: |
   server=1
   rpcallowip=0.0.0.0/0

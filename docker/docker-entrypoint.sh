@@ -19,8 +19,9 @@ fi
 if [ "$(echo "$1" | cut -c1)" = "-" ] || [ "$1" = "bitcoind" ]; then
   mkdir -p "$BITCOIN_DATA"
   chmod 700 "$BITCOIN_DATA"
-  chown -R bitcoin:bitcoin "$(getent passwd bitcoin | cut -d: -f6)"
-  chown -R bitcoin:bitcoin "$BITCOIN_DATA"
+  # Use find to chown, skipping read-only ConfigMap mounts (e.g. bitcoin.conf subPath)
+  find "$(getent passwd bitcoin | cut -d: -f6)" -writable -exec chown bitcoin:bitcoin {} + 2>/dev/null || true
+  find "$BITCOIN_DATA" -writable -exec chown bitcoin:bitcoin {} + 2>/dev/null || true
   echo "$0: setting data directory to $BITCOIN_DATA"
   set -- "$@" -datadir="$BITCOIN_DATA"
 fi

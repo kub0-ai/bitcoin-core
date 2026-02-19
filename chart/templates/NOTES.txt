@@ -1,9 +1,17 @@
 Bitcoin Core {{ .Chart.AppVersion }} deployed.
 
+{{- if gt (int .Values.bitcoin.prune) 0 }}
+
+Mode: PRUNED (keeping {{ .Values.bitcoin.prune }} MiB of block data)
+Data volume: {{ .Values.persistence.prunedSize }}
+{{- else }}
+
+Mode: Full node (unpruned)
+Data volume: {{ .Values.persistence.size }}
+{{- end }}
+
 RPC:
   kubectl port-forward svc/{{ include "bitcoin-core.fullname" . }} 8332:{{ .Values.service.rpcPort }}
   bitcoin-cli -rpcconnect=127.0.0.1 -rpcport=8332 getblockchaininfo
 
 P2P port: {{ .Values.service.p2pPort }}
-
-Data volume: {{ .Values.persistence.size }}
