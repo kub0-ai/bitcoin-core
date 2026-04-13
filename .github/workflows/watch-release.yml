@@ -18,8 +18,17 @@ jobs:
 
       - name: Get latest upstream release
         id: upstream
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          LATEST=$(curl -s https://api.github.com/repos/bitcoin/bitcoin/releases/latest | jq -r '.tag_name')
+          # Use auth to avoid rate limiting; filter out pre-releases in case latest is an RC
+          LATEST=$(curl -s -H "Authorization: token $GH_TOKEN" \
+            "https://api.github.com/repos/bitcoin/bitcoin/releases" \
+            | jq -r '[.[] | select(.prerelease == false)] | first | .tag_name')
+          if [ -z "$LATEST" ] || [ "$LATEST" = "null" ]; then
+            echo "Could not detect upstream version (rate-limited or no stable release)"
+            exit 1
+          fi
           # Strip 'v' prefix
           VERSION="${LATEST#v}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
