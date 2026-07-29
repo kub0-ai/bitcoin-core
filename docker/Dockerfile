@@ -21,33 +21,54 @@ ENV BITCOIN_VERSION=${VERSION}
 ENV BITCOIN_DATA=/home/bitcoin/.bitcoin
 ENV PATH=/opt/bitcoin-${BITCOIN_VERSION}/bin:$PATH
 
+# KEYS is required: fingerprints of trusted Bitcoin Core signers (no TOFU).
+# Verify path: import only allowlisted keys → require GOODSIG (not EXPKEYSIG) →
+# every VALIDSIG primary fingerprint must be in the KEYS allowlist (case-insensitive hex).
 RUN set -ex \
   && case "${TARGETPLATFORM}" in \
        linux/amd64) ARCH=x86_64-linux-gnu ;; \
        linux/arm64) ARCH=aarch64-linux-gnu ;; \
        *) echo "Unsupported platform: ${TARGETPLATFORM}" && exit 1 ;; \
      esac \
+  && if [ -z "$(echo "${KEYS}" | tr -d '[:space:]')" ]; then \
+       echo "ERROR: KEYS build-arg is empty — refusing TOFU auto-import from the artifact under verification"; \
+       exit 1; \
+     fi \
   && curl -SLO https://bitcoincore.org/bin/bitcoin-core-${BITCOIN_VERSION}/SHA256SUMS \
   && curl -SLO https://bitcoincore.org/bin/bitcoin-core-${BITCOIN_VERSION}/SHA256SUMS.asc \
-  && if [ -n "${KEYS}" ]; then \
-       echo "Importing provided keys..."; \
-       for key in ${KEYS}; do \
-         gpg --batch --keyserver keyserver.ubuntu.com --recv-keys "$key" || \
-         gpg --batch --keyserver keys.openpgp.org --recv-keys "$key" || \
-         gpg --batch --keyserver pgp.mit.edu --recv-keys "$key" ; \
-       done; \
-     else \
-       echo "Auto-discovering signing keys from SHA256SUMS.asc..."; \
-       AUTO_KEYS=$(gpg --verify --status-fd=1 SHA256SUMS.asc SHA256SUMS 2>/dev/null | grep -oE '[0-9A-F]{16,40}' | sort -u || true); \
-       for key in $AUTO_KEYS; do \
-         gpg --batch --keyserver keyserver.ubuntu.com --recv-keys "$key" || \
-         gpg --batch --keyserver keys.openpgp.org --recv-keys "$key" || \
-         gpg --batch --keyserver pgp.mit.edu --recv-keys "$key" ; \
-       done; \
+  && echo "Importing allowlisted KEYS only..." \
+  && for key in ${KEYS}; do \
+       gpg --batch --keyserver keyserver.ubuntu.com --recv-keys "$key" || \
+       gpg --batch --keyserver keys.openpgp.org --recv-keys "$key" || \
+       gpg --batch --keyserver pgp.mit.edu --recv-keys "$key" ; \
+     done \
+  && GPG_STATUS=$(gpg --verify --status-fd=1 SHA256SUMS.asc SHA256SUMS 2>/dev/null || true) \
+  && echo "$GPG_STATUS" \
+  && if ! echo "$GPG_STATUS" | grep -q "GOODSIG"; then \
+       echo "ERROR: No GOODSIG on SHA256SUMS.asc (EXPKEYSIG alone is not accepted)"; \
+       exit 1; \
      fi \
-  && if ! gpg --verify --status-fd=1 SHA256SUMS.asc SHA256SUMS 2>/dev/null | grep -qE "GOODSIG|EXPKEYSIG"; then \
-       echo "ERROR: No valid GPG signature found in SHA256SUMS.asc"; exit 1; \
+  && ALLOW_HEX=$(echo "${KEYS}" | tr -d '[:space:]' | tr 'a-f' 'A-F') \
+  && VALID_LINES=$(echo "$GPG_STATUS" | awk '/\[GNUPG:\] VALIDSIG / {print toupper($3), toupper($NF)}') \
+  && if [ -z "$VALID_LINES" ]; then \
+       echo "ERROR: No VALIDSIG status lines from gpg --verify"; \
+       exit 1; \
      fi \
+  && printf '%s\n' "$VALID_LINES" > /tmp/validsig.fps \
+  && while read -r sign_fp primary_fp; do \
+       matched=0; \
+       for fp in "$sign_fp" "$primary_fp"; do \
+         [ -z "$fp" ] && continue; \
+         case "$ALLOW_HEX" in \
+           *"$fp"*) matched=1; echo "VALIDSIG $fp is in KEYS allowlist"; break ;; \
+         esac; \
+       done; \
+       if [ "$matched" -ne 1 ]; then \
+         echo "ERROR: VALIDSIG fingerprint(s) $sign_fp / $primary_fp not in KEYS allowlist"; \
+         exit 1; \
+       fi; \
+     done < /tmp/validsig.fps \
+  && rm -f /tmp/validsig.fps \
   && curl -SLO https://bitcoincore.org/bin/bitcoin-core-${BITCOIN_VERSION}/bitcoin-${BITCOIN_VERSION}-${ARCH}.tar.gz \
   && grep " bitcoin-${BITCOIN_VERSION}-${ARCH}.tar.gz" SHA256SUMS | sha256sum -c - \
   && tar -xzf *.tar.gz -C /opt \

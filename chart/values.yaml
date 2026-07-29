@@ -27,10 +27,23 @@ service:
   p2pPort: 8333
 
 # Extra bitcoin.conf lines (set to "" to skip ConfigMap)
+#
+# RPC threat model (read before widening bind/allow):
+# - Cookie auth: when rpcuser/rpcpassword/rpcauth are unset, bitcoind writes
+#   .cookie under the datadir. Local bitcoin-cli (probes) use that cookie.
+#   Any process that can read the PVC (or a stolen volume snapshot) gets full RPC.
+# - Default bind is localhost only so other cluster pods cannot dial RPC:8332.
+#   Probes use the CLI against the local datadir — they do not need remote RPC.
+# - For in-cluster remote RPC clients, deliberately set e.g.:
+#     rpcbind=0.0.0.0
+#     rpcallowip=<podCIDR or client namespace CIDR>   # NOT 0.0.0.0/0
+#   and inject rpcauth=... from a Secret (never bake passwords into this ConfigMap).
+# - World-allow (rpcallowip=0.0.0.0/0 + rpcbind=0.0.0.0) without rpcauth is unsafe:
+#   weak/missing auth later inherits a wide allow surface.
 config: |
   server=1
-  rpcallowip=0.0.0.0/0
-  rpcbind=0.0.0.0
+  rpcallowip=127.0.0.1
+  rpcbind=127.0.0.1
 
 resources: {}
   # limits:

@@ -21,11 +21,21 @@ spec:
       {{- end }}
       securityContext:
         fsGroup: 101
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
       {{- if or .Values.config (gt (int .Values.bitcoin.prune) 0) }}
       initContainers:
         - name: init-config
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           command: ["sh", "-c", "rm -f /home/bitcoin/.bitcoin/bitcoin.conf"]
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           volumeMounts:
             - name: data
               mountPath: /home/bitcoin/.bitcoin
@@ -34,6 +44,13 @@ spec:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           ports:
             - name: rpc
               containerPort: 8332

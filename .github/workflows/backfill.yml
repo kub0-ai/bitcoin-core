@@ -7,8 +7,9 @@ on:
         description: 'Bitcoin Core version (e.g., 27.2)'
         required: true
       keys:
-        description: 'GPG keys (space-separated, overrides auto-discovery)'
+        description: 'Optional GPG fingerprints (space-separated). Must be non-empty subset of repo KEYS file. Default: full KEYS file. Empty values are refused (no TOFU).'
         required: false
+        default: ''
 
 permissions:
   contents: write
@@ -21,14 +22,41 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Resolve KEYS
+      - name: Resolve KEYS (require non-empty allowlist; no TOFU)
         id: keys
         run: |
-          if [ -n "${{ github.event.inputs.keys }}" ]; then
-            echo "keys=${{ github.event.inputs.keys }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "keys=" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          if [ ! -s KEYS ]; then
+            echo "ERROR: repo KEYS file is missing or empty"
+            exit 1
           fi
+          REPO_KEYS=$(tr '\n' ' ' < KEYS | xargs)
+          INPUT_KEYS="${{ github.event.inputs.keys }}"
+          # trim
+          INPUT_KEYS=$(echo "$INPUT_KEYS" | xargs || true)
+          if [ -n "$INPUT_KEYS" ]; then
+            KEYS="$INPUT_KEYS"
+            # every override fingerprint must appear in repo KEYS (case-insensitive hex)
+            REPO_HEX=$(echo "$REPO_KEYS" | tr -d '[:space:]' | tr 'a-f' 'A-F')
+            for k in $KEYS; do
+              ku=$(echo "$k" | tr -d '[:space:]' | tr 'a-f' 'A-F')
+              case "$REPO_HEX" in
+                *"$ku"*) ;;
+                *)
+                  echo "ERROR: fingerprint $k is not in repo KEYS allowlist"
+                  exit 1
+                  ;;
+              esac
+            done
+          else
+            KEYS="$REPO_KEYS"
+          fi
+          if [ -z "$(echo "$KEYS" | tr -d '[:space:]')" ]; then
+            echo "ERROR: resolved KEYS is empty — refusing TOFU / empty-keys path"
+            exit 1
+          fi
+          echo "keys=$KEYS" >> "$GITHUB_OUTPUT"
+          echo "Resolved $(echo "$KEYS" | wc -w) fingerprint(s) from allowlist"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
