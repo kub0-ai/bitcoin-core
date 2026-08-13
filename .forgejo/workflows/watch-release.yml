@@ -26,22 +26,11 @@ name: Watch Upstream Release
 # This workflow never pushes main. It only ever opens a PR for a human to review.
 
 on:
-  # SCHEDULE DISARMED 2026-08-13 -- do not re-arm until PR creation works.
-  # The watcher cannot open a PR on this forge. Three runs failed identically at
-  # POST /pulls with `curl: (22) ... 404`: with secrets.FORGEJO_TOKEN (10330),
-  # with the auto per-run secrets.GITHUB_TOKEN (10335), and with GITHUB_TOKEN plus
-  # an explicit `permissions: pull-requests: write` (10341). The same POST with a
-  # user PAT returns 201, so endpoint, payload and head are all correct -- Forgejo
-  # 15.0.5 simply does not grant a runner-reachable credential the pull-requests
-  # unit, and reports the refusal as 404 rather than 403.
-  #
-  # This is a forge asymmetry, not a porting bug: GitHub's GITHUB_TOKEN does grant
-  # pull-requests: write, which is why the .github twin works. Re-arming before the
-  # credential is settled buys one red run per day and no signal -- the exact
-  # pattern removed from kub0-ai/zcash earlier the same day.
-  #
-  # schedule:
-  #   - cron: '30 6 * * *'
+  # Re-armed 2026-08-13 after action_run 6056 / task 10419 (status=1) opened
+  # PR #9 via secrets.WATCHER_TOKEN. Per-run GITHUB_TOKEN still cannot open
+  # PRs on this forge (10335/10341); do not revert FJ_TOKEN to it.
+  schedule:
+    - cron: '30 6 * * *'
   workflow_dispatch:
 
 permissions:
